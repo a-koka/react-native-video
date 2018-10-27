@@ -22,6 +22,10 @@ export default class Video extends Component {
     this.state = {
       showPoster: true,
     };
+
+    this._nextRequestId = 1;
+    this._requestMap = new Map();
+    this._requests = [];
   }
 
   setNativeProps(nativeProps) {
@@ -64,6 +68,34 @@ export default class Video extends Component {
     } else {
       this.setNativeProps({ seek: time });
     }
+  };
+
+  fade = function(type, steps, frequency, initialVolume) {
+    const requestId = this._nextRequestId;
+    const requestMap = this._requestMap;
+
+    const promise = new Promise((resolve, reject) => {
+      requestMap[requestId] = { resolve, reject };
+    });
+
+    this._nextRequestId++;
+
+    this._requests.push({
+      type,
+      steps,
+      frequency,
+      initialVolume,
+      requestId,
+      nextRequestId: this._nextRequestId
+    })
+
+    NativeModules.UIManager.dispatchViewManagerCommand(
+      findNodeHandle(this._root),
+      NativeModules.UIManager.RCTVideo.Commands.fadeVolume,
+      [requestId, type, steps, frequency, initialVolume]
+    );
+
+    return promise;
   };
 
   presentFullscreenPlayer = () => {
@@ -204,6 +236,25 @@ export default class Video extends Component {
     }
   };
 
+  _onVolumeFaded = (event) => {
+    const { requestId } = event.nativeEvent;
+    const promise = this._requestMap[requestId];
+
+    if (promise) {
+      promise.resolve();
+    } else {
+      const { onVolumeFaded, onError } = this.props;
+      if ( onVolumeFaded ) { // Use fallback if available
+        onVolumeFaded(event.nativeEvent);
+      }
+      if ( onError ) {
+        onError({ title:'Volume fade error', message: 'Could not find promise in requestMap', requestId, nextRequestId: this._nextRequestId, requests: this._requests });
+      }
+    }
+
+    this._requestMap.delete(requestId);
+  };
+
   render() {
     const resizeMode = this.props.resizeMode;
     const source = resolveAssetSource(this.props.source) || {};
@@ -247,6 +298,7 @@ export default class Video extends Component {
       onVideoSeek: this._onSeek,
       onVideoEnd: this._onEnd,
       onVideoBuffer: this._onBuffer,
+      onVolumeFadeComplete: this._onVolumeFaded,
       onTimedMetadata: this._onTimedMetadata,
       onVideoAudioBecomingNoisy: this._onAudioBecomingNoisy,
       onVideoExternalPlaybackChange: this._onExternalPlaybackChange,
@@ -307,9 +359,11 @@ Video.propTypes = {
     PropTypes.object
   ]),
   fullscreen: PropTypes.bool,
+  fadeVolume: PropTypes.func,
   onVideoLoadStart: PropTypes.func,
   onVideoLoad: PropTypes.func,
   onVideoBuffer: PropTypes.func,
+  onVolumeFadeComplete: PropTypes.func,
   onVideoError: PropTypes.func,
   onVideoProgress: PropTypes.func,
   onVideoSeek: PropTypes.func,
@@ -387,6 +441,7 @@ Video.propTypes = {
   onLoadStart: PropTypes.func,
   onLoad: PropTypes.func,
   onBuffer: PropTypes.func,
+  onVolumeFaded: PropTypes.func,
   onError: PropTypes.func,
   onProgress: PropTypes.func,
   onSeek: PropTypes.func,
