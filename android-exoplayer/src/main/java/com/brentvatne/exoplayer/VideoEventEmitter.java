@@ -46,6 +46,8 @@ class VideoEventEmitter {
     private static final String EVENT_AUDIO_FOCUS_CHANGE = "onAudioFocusChanged";
     private static final String EVENT_PLAYBACK_RATE_CHANGE = "onPlaybackRateChange";
 
+    private static final String EVENT_ON_VOLUME_FADE_COMPLETE = "onVolumeFadeComplete";
+
     static final String[] Events = {
             EVENT_LOAD_START,
             EVENT_LOAD,
@@ -66,6 +68,7 @@ class VideoEventEmitter {
             EVENT_AUDIO_BECOMING_NOISY,
             EVENT_AUDIO_FOCUS_CHANGE,
             EVENT_PLAYBACK_RATE_CHANGE,
+            EVENT_ON_VOLUME_FADE_COMPLETE,
     };
 
     @Retention(RetentionPolicy.SOURCE)
@@ -89,6 +92,7 @@ class VideoEventEmitter {
             EVENT_AUDIO_BECOMING_NOISY,
             EVENT_AUDIO_FOCUS_CHANGE,
             EVENT_PLAYBACK_RATE_CHANGE,
+            EVENT_ON_VOLUME_FADE_COMPLETE,
     })
     @interface VideoEvents {
     }
@@ -223,6 +227,12 @@ class VideoEventEmitter {
         WritableMap map = Arguments.createMap();
         map.putDouble(EVENT_PROP_PLAYBACK_RATE, (double)rate);
         receiveEvent(EVENT_PLAYBACK_RATE_CHANGE, map);
+    }
+
+    void volumefaded(int requestId) {
+        WritableMap map = Arguments.createMap();
+        map.putInt("requestId", requestId);
+        receiveEvent(EVENT_ON_VOLUME_FADE_COMPLETE, map);
     }
 
     void timedMetadata(Metadata metadata) {
