@@ -17,15 +17,24 @@ import com.facebook.react.bridge.ReactMethod;
 import com.google.android.exoplayer2.util.Util;
 import com.google.android.exoplayer2.DefaultLoadControl;
 import com.google.android.exoplayer2.upstream.RawResourceDataSource;
+import com.google.android.exoplayer2.upstream.cache.*;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.Map;
+
 import java.util.UUID;
+import java.util.Timer;
+import java.util.TimerTask;
 
 import javax.annotation.Nullable;
 
 public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerView> {
+
+    private static final HashMap<ReactExoplayerView, TimerTask> activeTasks = new HashMap<ReactExoplayerView, TimerTask>();
 
     private static final String REACT_CLASS = "RCTVideo";
 
@@ -77,6 +86,12 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
         this.config = config;
     }
 
+    public static final int COMMAND_FADE_VOLUME = 1;
+
+    private VideoEventEmitter eventEmitter;
+    private SimpleCache simpleCache;
+    private Uri srcUri;
+
     @Override
     public String getName() {
         return REACT_CLASS;
@@ -84,6 +99,7 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
 
     @Override
     protected ReactExoplayerView createViewInstance(ThemedReactContext themedReactContext) {
+        this.eventEmitter = new VideoEventEmitter(themedReactContext);
         return new ReactExoplayerView(themedReactContext, config);
     }
 
@@ -136,6 +152,47 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
         }
     }
 
+    @Nullable
+    @Override
+    public Map<String, Integer> getCommandsMap() {
+        return MapBuilder.of("fadeVolume", COMMAND_FADE_VOLUME);
+    }
+
+    @Override
+    public void receiveCommand(final ReactExoplayerView videoView, int commandId, @Nullable ReadableArray args) {
+        // This will be called whenever a command is sent from react-native.
+        switch (commandId) {
+            case COMMAND_FADE_VOLUME: {
+                if (args != null) {
+                    final int requestId = args.getInt(0);
+                    final String type = args.getString(1);
+                    final int steps = args.getInt(2);
+                    final int frequency = args.getInt(3);
+                    float initialVolume = (float) args.getDouble(4);
+
+                    // Avoid overlapping fadeIn and fadeOut
+                    if(activeTasks.containsKey(videoView)){
+                        activeTasks.get(videoView).cancel();
+                        Float currentVolume = videoView.getVolume();
+                        if(currentVolume != null){
+                            initialVolume = currentVolume.floatValue();
+                        }
+                    }
+
+                    Timer timer = new Timer(); // Create a new timer which runs in it's own thread
+                    TimerTask task = new FadeTimerTask(type, steps, initialVolume, videoView, requestId);
+                    timer.scheduleAtFixedRate(task, 0, frequency);
+
+                    activeTasks.put(videoView, task);
+                }
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+    }
+
     @ReactProp(name = PROP_SRC)
     public void setSrc(final ReactExoplayerView videoView, @Nullable ReadableMap src) {
         Context context = videoView.getContext().getApplicationContext();
@@ -148,7 +205,7 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
         }
 
         if (startsWithValidScheme(uriString)) {
-            Uri srcUri = Uri.parse(uriString);
+            srcUri = Uri.parse(uriString);
 
             if (srcUri != null) {
                 videoView.setSrc(srcUri, extension, headers);
@@ -167,7 +224,7 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
                 );
             }
             if (identifier > 0) {
-                Uri srcUri = RawResourceDataSource.buildRawResourceUri(identifier);
+                srcUri = RawResourceDataSource.buildRawResourceUri(identifier);
                 if (srcUri != null) {
                     videoView.setRawSrc(srcUri, extension);
                 }
@@ -329,6 +386,56 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
             bufferForPlaybackAfterRebufferMs = bufferConfig.hasKey(PROP_BUFFER_CONFIG_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS)
                     ? bufferConfig.getInt(PROP_BUFFER_CONFIG_BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS) : bufferForPlaybackAfterRebufferMs;
             videoView.setBufferConfig(minBufferMs, maxBufferMs, bufferForPlaybackMs, bufferForPlaybackAfterRebufferMs);
+        }
+    }
+
+    public class FadeTimerTask extends TimerTask {
+        private String type;
+        private int steps;
+        private int requestId;
+        private float initialVolume;
+        private ReactExoplayerView videoView;
+
+        private int count;
+
+        public FadeTimerTask(final String type, final int steps, final float initialVolume, final ReactExoplayerView videoView, final int requestId){
+            this.type = type;
+            this.steps = steps;
+            this.initialVolume = initialVolume;
+            this.videoView = videoView;
+            this.requestId = requestId;
+
+            if(type.equals("fadeIn")){
+                this.count = steps - 1;
+            }else if(type.equals("fadeOut")) {
+                this.count = 1;
+            }
+        }
+
+        @Override
+        public void run() {
+            float percent = (float)(steps - count) / steps;
+            double fadeVolume = Math.pow(percent, 1.5);
+
+            videoView.setVolumeModifier((float)fadeVolume * initialVolume);
+
+            if(type.equals("fadeIn")){
+                if(count == 0){
+                    this.cancel();
+                    activeTasks.remove(videoView);
+                    eventEmitter.setViewId(videoView.getId());
+                    eventEmitter.volumefaded(requestId);
+                }
+                count--;
+            }else if(type.equals("fadeOut")) {
+                if(count == steps) {
+                    this.cancel();
+                    activeTasks.remove(videoView);
+                    eventEmitter.setViewId(videoView.getId());
+                    eventEmitter.volumefaded(requestId);
+                }
+                count++;
+            }
         }
     }
 

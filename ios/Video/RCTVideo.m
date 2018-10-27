@@ -1632,35 +1632,56 @@ static int const RCTVideoUnset = -1;
   AVAsset *asset = _playerItem.asset;
   
   if (asset != nil) {
-    
-    AVAssetExportSession *exportSession = [AVAssetExportSession
-                                           exportSessionWithAsset:asset presetName:AVAssetExportPresetHighestQuality];
-    
+
+    AVMutableComposition* composition = [[AVMutableComposition alloc] init];
+    AVMutableCompositionTrack *track = [composition addMutableTrackWithMediaType:AVMediaTypeAudio preferredTrackID:kCMPersistentTrackID_Invalid];
+    [track insertTimeRange:CMTimeRangeMake(kCMTimeZero, asset.duration) ofTrack:[[asset tracksWithMediaType:AVMediaTypeAudio] objectAtIndex:0] atTime:kCMTimeZero error:nil];
+
+    AVAssetExportSession *exportSession = [AVAssetExportSession exportSessionWithAsset:composition presetName:AVAssetExportPresetPassthrough];
+
     if (exportSession != nil) {
-      NSString *path = nil;
-      NSArray *array = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
-      path = [self generatePathInDirectory:[[self cacheDirectoryPath] stringByAppendingPathComponent:@"Videos"]
-                             withExtension:@".mp4"];
-      NSURL *url = [NSURL fileURLWithPath:path];
-      exportSession.outputFileType = AVFileTypeMPEG4;
-      exportSession.outputURL = url;
-      exportSession.videoComposition = _playerItem.videoComposition;
-      exportSession.shouldOptimizeForNetworkUse = true;
-      [exportSession exportAsynchronouslyWithCompletionHandler:^{
-        
-        switch ([exportSession status]) {
-          case AVAssetExportSessionStatusFailed:
-            reject(@"ERROR_COULD_NOT_EXPORT_VIDEO", @"Could not export video", exportSession.error);
-            break;
-          case AVAssetExportSessionStatusCancelled:
-            reject(@"ERROR_EXPORT_SESSION_CANCELLED", @"Export session was cancelled", exportSession.error);
-            break;
-          default:
-            resolve(@{@"uri": url.absoluteString});
-            break;
+        NSString *relativePath = [options objectForKey:@"relativePath"];
+
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+        NSString *documentsDirectory = [paths lastObject];
+
+        NSString *outputPath;
+        if([relativePath hasSuffix:@".m4a"]){
+            outputPath = [documentsDirectory stringByAppendingPathComponent: relativePath];
+            exportSession.outputFileType = AVFileTypeAppleM4A;
+        }else if([relativePath hasSuffix:@".mp3"]){
+            // Apple doesn't support exporting mp3 files. We will export as mov and then rename the file
+            NSString *mp3Path = [documentsDirectory stringByAppendingPathComponent: relativePath];;
+            outputPath = [mp3Path stringByReplacingOccurrencesOfString: @".mp3" withString:@".mov"];
+            exportSession.outputFileType = AVFileTypeQuickTimeMovie;
+            exportSession.shouldOptimizeForNetworkUse = YES;
+        }else{
+            return reject(@"ERROR_COULD_NOT_EXPORT_FILE", @"Unsupported file extension", nil);
         }
-        
-      }];
+
+        NSURL *outputURL = [NSURL fileURLWithPath:outputPath];
+        exportSession.outputURL = outputURL;
+
+        [exportSession exportAsynchronouslyWithCompletionHandler:^(void) {
+            if(exportSession.status == AVAssetExportSessionStatusFailed){
+                reject(@"ERROR_COULD_NOT_EXPORT_FILE", [exportSession.error localizedFailureReason], nil);
+            } else if (exportSession.status == AVAssetExportSessionStatusCompleted){
+                 NSError *moveErr = nil;
+                 if([relativePath hasSuffix:@".mp3"]){
+                     NSFileManager *manage = [NSFileManager defaultManager];
+                     NSString *mp3Path = [outputPath stringByReplacingOccurrencesOfString: @".mov" withString:@".mp3"];
+                     [manage moveItemAtPath:outputPath toPath:mp3Path error:&moveErr];
+                 }
+
+                 if(moveErr == nil){
+                    resolve(@{@"exported": @YES});
+                 }else{
+                    reject(@"ERROR_COULD_NOT_EXPORT_FILE", @"Could not move file", nil);
+                 }
+             } else {
+                 reject(@"ERROR_COULD_NOT_EXPORT_FILE", [exportSession.error localizedDescription], nil);
+             }
+        }];
       
     } else {
       
