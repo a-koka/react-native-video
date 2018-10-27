@@ -76,6 +76,10 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
 
     private VideoEventEmitter eventEmitter;
 
+    public static final int COMMAND_FADE_VOLUME = 1;
+
+    private VideoEventEmitter eventEmitter;
+
     @Override
     public String getName() {
         return REACT_CLASS;
