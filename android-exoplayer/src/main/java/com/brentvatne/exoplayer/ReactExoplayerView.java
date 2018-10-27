@@ -1062,6 +1062,13 @@ class ReactExoplayerView extends FrameLayout implements
         }
     }
 
+    public Float getVolume() {
+        if (player != null) {
+            return player.getVolume();
+        }
+        return null;
+    }
+
     public void seekTo(long positionMs) {
         if (player != null) {
             seekTime = positionMs;
