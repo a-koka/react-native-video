@@ -264,6 +264,7 @@ var styles = StyleSheet.create({
 * [fullscreenAutorotate](#fullscreenautorotate)
 * [fullscreenOrientation](#fullscreenorientation)
 * [headers](#headers)
+* [hideShutterView](#hideshutterview)
 * [id](#id)
 * [ignoreSilentSwitch](#ignoresilentswitch)
 * [muted](#muted)
@@ -414,6 +415,14 @@ headers={{
   'X-Custom-Header': 'some value'
 }}
 ```
+
+Platforms: Android ExoPlayer
+
+#### hideShutterView
+Controls ExoPlayer shutterView(black screen while loading) visibility
+
+* **false (default)** - Show shutterView 
+* **true** - Hide shutterView
 
 Platforms: Android ExoPlayer
 
