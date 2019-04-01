@@ -18,7 +18,7 @@
 #elif TARGET_OS_TV
 @interface RCTVideo : UIView <RCTVideoPlayerViewControllerDelegate>
 #else
-@interface RCTVideo : UIView <RCTVideoPlayerViewControllerDelegate, AVPictureInPictureControllerDelegate>
+@interface RCTVideo : UIView <RCTVideoPlayerViewControllerDelegate, AVAssetResourceLoaderDelegate>
 #endif
 
 @property (nonatomic, copy) RCTBubblingEventBlock onVideoLoadStart;
