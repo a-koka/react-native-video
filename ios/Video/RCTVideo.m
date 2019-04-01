@@ -492,6 +492,7 @@ static int const RCTVideoUnset = -1;
 #endif
 
     AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url options:assetOptions];
+    [asset.resourceLoader setDelegate:self queue:dispatch_get_main_queue()];
     [self playerItemPrepareText:asset assetOptions:assetOptions withCallback:handler];
     return;
   } else if (isAsset) {
@@ -1398,41 +1399,33 @@ static int const RCTVideoUnset = -1;
 
     if (asset != nil) {
 
-        AVAssetExportSession *exportSession = [AVAssetExportSession
-                exportSessionWithAsset:asset presetName:AVAssetExportPresetHighestQuality];
-
+        AVAssetExportSession *exportSession = [[AVAssetExportSession alloc] initWithAsset:asset presetName:AVAssetExportPresetPassthrough];
         if (exportSession != nil) {
-            NSString *path = nil;
-            NSArray *array = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
-            path = [self generatePathInDirectory:[[self cacheDirectoryPath] stringByAppendingPathComponent:@"Videos"]
-                                   withExtension:@".mp4"];
-            NSURL *url = [NSURL fileURLWithPath:path];
-            exportSession.outputFileType = AVFileTypeMPEG4;
-            exportSession.outputURL = url;
-            exportSession.videoComposition = _playerItem.videoComposition;
-            exportSession.shouldOptimizeForNetworkUse = true;
-            [exportSession exportAsynchronouslyWithCompletionHandler:^{
-
-                switch ([exportSession status]) {
-                    case AVAssetExportSessionStatusFailed:
-                        reject(@"ERROR_COULD_NOT_EXPORT_VIDEO", @"Could not export video", exportSession.error);
-                        break;
-                    case AVAssetExportSessionStatusCancelled:
-                        reject(@"ERROR_EXPORT_SESSION_CANCELLED", @"Export session was cancelled", exportSession.error);
-                        break;
-                    default:
-                        resolve(@{@"uri": url.absoluteString});
-                        break;
-                }
-
-            }];
-
+            NSString *relativePath = [options objectForKey:@"relativePath"];
+            
+            NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+            NSString *documentsDirectory = [paths lastObject];
+            
+            NSString *outputPath = [documentsDirectory stringByAppendingPathComponent: relativePath];
+            NSURL *outputURL = [NSURL fileURLWithPath:outputPath];
+            
+            exportSession.outputURL = outputURL;
+            
+            if([relativePath hasSuffix:@".m4a"]){
+                exportSession.outputFileType = AVFileTypeMPEG4;
+            }else if([relativePath hasSuffix:@".mp3"]){
+                exportSession.outputFileType = AVFileTypeMPEGLayer3;
+            }else{
+                reject(@"ERROR_COULD_NOT_EXPORT_FILE", @"Unsupported file extension", nil);
+            }
+            
+            [exportSession exportAsynchronouslyWithCompletionHandler:^(void)
+             {
+                 resolve(@{@"exported": @YES});
+             }];
         } else {
-
             reject(@"ERROR_COULD_NOT_CREATE_EXPORT_SESSION", @"Could not create export session", nil);
-
         }
-
     } else {
 
         reject(@"ERROR_ASSET_NIL", @"Asset is nil", nil);
