@@ -1512,27 +1512,45 @@ static int const RCTVideoUnset = -1;
         AVAssetExportSession *exportSession = [[AVAssetExportSession alloc] initWithAsset:asset presetName:AVAssetExportPresetPassthrough];
         if (exportSession != nil) {
             NSString *relativePath = [options objectForKey:@"relativePath"];
-            
+
             NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
             NSString *documentsDirectory = [paths lastObject];
-            
-            NSString *outputPath = [documentsDirectory stringByAppendingPathComponent: relativePath];
-            NSURL *outputURL = [NSURL fileURLWithPath:outputPath];
-            
-            exportSession.outputURL = outputURL;
-            
+
+            NSString *outputPath;
             if([relativePath hasSuffix:@".m4a"]){
-                exportSession.outputFileType = AVFileTypeMPEG4;
+                outputPath = [documentsDirectory stringByAppendingPathComponent: relativePath];
+                exportSession.outputFileType = AVFileTypeAppleM4A;
             }else if([relativePath hasSuffix:@".mp3"]){
-                exportSession.outputFileType = AVFileTypeMPEGLayer3;
+                // Apple doesn't support exporting mp3 files. We will export as move and then rename the file
+                NSString *mp3Path = [documentsDirectory stringByAppendingPathComponent: relativePath];;
+                outputPath = [mp3Path stringByReplacingOccurrencesOfString: @".mp3" withString:@".mov"];
+                exportSession.outputFileType = AVFileTypeQuickTimeMovie;
+                exportSession.shouldOptimizeForNetworkUse = YES;
             }else{
-                reject(@"ERROR_COULD_NOT_EXPORT_FILE", @"Unsupported file extension", nil);
+                return reject(@"ERROR_COULD_NOT_EXPORT_FILE", @"Unsupported file extension", nil);
             }
-            
-            [exportSession exportAsynchronouslyWithCompletionHandler:^(void)
-             {
-                 resolve(@{@"exported": @YES});
-             }];
+
+            NSURL *outputURL = [NSURL fileURLWithPath:outputPath];
+            exportSession.outputURL = outputURL;
+
+            [exportSession exportAsynchronouslyWithCompletionHandler:^(void) {
+                 if (exportSession.status == AVAssetExportSessionStatusCompleted){
+                     NSError *moveErr = nil;
+                     if([relativePath hasSuffix:@".mp3"]){
+                         NSFileManager *manage = [NSFileManager defaultManager];
+                         NSString *mp3Path = [outputPath stringByReplacingOccurrencesOfString: @".mov" withString:@".mp3"];
+                         [manage moveItemAtPath:outputPath toPath:mp3Path error:&moveErr];
+                     }
+
+                     if(moveErr == nil){
+                        resolve(@{@"exported": @YES});
+                     }else{
+                        reject(@"ERROR_COULD_NOT_EXPORT_FILE", @"Could not move file", nil);
+                     }
+                 } else {
+                     reject(@"ERROR_COULD_NOT_EXPORT_FILE", [exportSession.error localizedDescription], nil);
+                 }
+            }];
         } else {
             reject(@"ERROR_COULD_NOT_CREATE_EXPORT_SESSION", @"Could not create export session", nil);
         }
