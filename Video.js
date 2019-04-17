@@ -1,6 +1,6 @@
 import React, {Component} from 'react';
 import PropTypes from 'prop-types';
-import {StyleSheet, requireNativeComponent, NativeModules, View, ViewPropTypes, Image, Platform, findNodeHandle} from 'react-native';
+import {StyleSheet, requireNativeComponent, NativeModules, View, ViewPropTypes, Image, Platform, UIManager, findNodeHandle} from 'react-native';
 import resolveAssetSource from 'react-native/Libraries/Image/resolveAssetSource';
 import TextTrackType from './TextTrackType';
 import FilterType from './FilterType';
@@ -107,7 +107,16 @@ export default class Video extends Component {
   };
 
   save = async (options?) => {
-    return await NativeModules.VideoManager.save(options, findNodeHandle(this._root));
+    const handle = findNodeHandle(this._root);
+    if (Platform.OS === 'android') {
+      return UIManager.dispatchViewManagerCommand(
+        handle,
+        UIManager.getViewManagerConfig('RCTVideo').Commands.save,
+        [options],
+      );
+    } else {
+      return await NativeModules.VideoManager.save(options, handle);
+    }
   }
 
   restoreUserInterfaceForPictureInPictureStopCompleted = (restored) => {
@@ -265,6 +274,12 @@ export default class Video extends Component {
     return NativeModules.UIManager.getViewManagerConfig(viewManagerName);
   }
   
+  _onSave = (event) => {
+    if (this.props.onSave) {
+      this.props.onSave(event.nativeEvent);
+    }
+  };
+
   _onVolumeFaded = (event) => {
     const { requestId } = event.nativeEvent;
     const promise = this._requestMap[requestId];
@@ -336,6 +351,7 @@ export default class Video extends Component {
       onVideoEnd: this._onEnd,
       onVideoBuffer: this._onBuffer,
       onVideoBandwidthUpdate: this._onBandwidthUpdate,
+      onVideoSave: this._onSave,
       onVolumeFadeComplete: this._onVolumeFaded,
       onTimedMetadata: this._onTimedMetadata,
       onVideoAudioBecomingNoisy: this._onAudioBecomingNoisy,
@@ -404,6 +420,7 @@ Video.propTypes = {
   onVideoLoadStart: PropTypes.func,
   onVideoLoad: PropTypes.func,
   onVideoBuffer: PropTypes.func,
+  onVideoSave: PropTypes.func,
   onVolumeFadeComplete: PropTypes.func,
   onVideoError: PropTypes.func,
   onVideoProgress: PropTypes.func,
@@ -494,6 +511,7 @@ Video.propTypes = {
   onLoadStart: PropTypes.func,
   onLoad: PropTypes.func,
   onBuffer: PropTypes.func,
+  onSave: PropTypes.func,
   onVolumeFaded: PropTypes.func,
   onError: PropTypes.func,
   onProgress: PropTypes.func,

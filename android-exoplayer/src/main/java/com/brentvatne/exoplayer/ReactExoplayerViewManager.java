@@ -7,20 +7,14 @@ import android.text.TextUtils;
 import com.facebook.react.bridge.Dynamic;
 import com.facebook.react.bridge.ReadableArray;
 import com.facebook.react.bridge.ReadableMap;
-import com.facebook.react.bridge.ReadableNativeMap;
-import com.facebook.react.bridge.WritableMap;
-import com.facebook.react.uimanager.events.RCTEventEmitter;
 
 import com.facebook.react.common.MapBuilder;
-import com.facebook.react.uimanager.UIManagerModule;
 import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.uimanager.ViewGroupManager;
 import com.facebook.react.uimanager.annotations.ReactProp;
 import com.google.android.exoplayer2.DefaultLoadControl;
 import com.google.android.exoplayer2.upstream.RawResourceDataSource;
-
-import org.json.JSONException;
-import org.json.JSONObject;
+import com.google.android.exoplayer2.upstream.cache.*;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -77,8 +71,12 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
     private VideoEventEmitter eventEmitter;
 
     public static final int COMMAND_FADE_VOLUME = 1;
+    public static final int COMMAND_SAVE = 2;
 
     private VideoEventEmitter eventEmitter;
+    private ThemedReactContext trContext;
+    private SimpleCache simpleCache;
+    private Uri srcUri;
 
     @Override
     public String getName() {
@@ -87,8 +85,15 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
 
     @Override
     protected ReactExoplayerView createViewInstance(ThemedReactContext themedReactContext) {
+        trContext = themedReactContext;
+        if(simpleCache == null){
+            simpleCache = new SimpleCache(themedReactContext.getCacheDir(), new LeastRecentlyUsedCacheEvictor(100L * 1024L * 1024L)); // 100 MB
+        }
         this.eventEmitter = new VideoEventEmitter(themedReactContext);
-        return new ReactExoplayerView(themedReactContext);
+
+        ReactExoplayerView view = new ReactExoplayerView(themedReactContext);
+        view.setSimpleCache(simpleCache);
+        return view;
     }
 
     @Override
@@ -119,8 +124,8 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
     @Override
     public Map<String, Integer> getCommandsMap() {
         return MapBuilder.of(
-            "fadeVolume",
-            COMMAND_FADE_VOLUME
+            "fadeVolume", COMMAND_FADE_VOLUME
+            , "save", COMMAND_SAVE
         );
     }
 
@@ -128,7 +133,7 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
     public void receiveCommand(final ReactExoplayerView videoView, int commandId, @Nullable ReadableArray args) {
         // This will be called whenever a command is sent from react-native.
         switch (commandId) {
-            case COMMAND_FADE_VOLUME:
+            case COMMAND_FADE_VOLUME: {
                 if (args != null) {
                     final int requestId = args.getInt(0);
                     final String type = args.getString(1);
@@ -151,7 +156,21 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
 
                     activeTasks.put(videoView, task);
                 }
-            break;
+                break;
+            }
+            case COMMAND_SAVE: {
+                String relativePath = null;
+                for(int i = 0; i<args.size();i++){
+                    ReadableMap o = args.getMap(i);
+                    relativePath = o.getString("relativePath");
+                }
+                eventEmitter.setViewId(videoView.getId());
+                new CreateFile(eventEmitter).execute(new CreateFileParams(trContext, simpleCache, relativePath, srcUri));
+                break;
+            }
+            default: {
+                break;
+            }
         }
     }
 
@@ -168,7 +187,7 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
         }
 
         if (startsWithValidScheme(uriString)) {
-            Uri srcUri = Uri.parse(uriString);
+            srcUri = Uri.parse(uriString);
 
             if (srcUri != null) {
                 videoView.setSrc(srcUri, extension, headers);
@@ -187,7 +206,7 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
                 );
             }
             if (identifier > 0) {
-                Uri srcUri = RawResourceDataSource.buildRawResourceUri(identifier);
+                srcUri = RawResourceDataSource.buildRawResourceUri(identifier);
                 if (srcUri != null) {
                     videoView.setRawSrc(srcUri, extension);
                 }
