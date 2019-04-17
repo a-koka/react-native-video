@@ -62,6 +62,7 @@ import com.google.android.exoplayer2.upstream.DefaultAllocator;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 import com.google.android.exoplayer2.util.MimeTypes;
 import com.google.android.exoplayer2.util.Util;
+import com.google.android.exoplayer2.upstream.cache.*;
 
 import java.net.CookieHandler;
 import java.net.CookieManager;
@@ -138,6 +139,7 @@ class ReactExoplayerView extends FrameLayout implements
     private final ThemedReactContext themedReactContext;
     private final AudioManager audioManager;
     private final AudioBecomingNoisyReceiver audioBecomingNoisyReceiver;
+    private SimpleCache simpleCache;
 
     private final Handler progressHandler = new Handler() {
         @Override
@@ -176,6 +178,10 @@ class ReactExoplayerView extends FrameLayout implements
     public void setId(int id) {
         super.setId(id);
         eventEmitter.setViewId(id);
+    }
+
+    protected void setSimpleCache(SimpleCache simpleCache) {
+        this.simpleCache = simpleCache;
     }
 
     private void createViews() {
@@ -438,7 +444,7 @@ class ReactExoplayerView extends FrameLayout implements
      * @return A new DataSource factory.
      */
     private DataSource.Factory buildDataSourceFactory(boolean useBandwidthMeter) {
-        return DataSourceUtil.getDefaultDataSourceFactory(this.themedReactContext, useBandwidthMeter ? BANDWIDTH_METER : null, requestHeaders);
+        return DataSourceUtil.getDefaultDataSourceFactory(this.themedReactContext, useBandwidthMeter ? BANDWIDTH_METER : null, requestHeaders, this.simpleCache);
     }
 
     // AudioManager.OnAudioFocusChangeListener implementation
@@ -714,7 +720,7 @@ class ReactExoplayerView extends FrameLayout implements
             this.srcUri = uri;
             this.extension = extension;
             this.requestHeaders = headers;
-            this.mediaDataSourceFactory = DataSourceUtil.getDefaultDataSourceFactory(this.themedReactContext, BANDWIDTH_METER, this.requestHeaders);
+            this.mediaDataSourceFactory = DataSourceUtil.getDefaultDataSourceFactory(this.themedReactContext, BANDWIDTH_METER, this.requestHeaders, this.simpleCache);
 
             if (!isOriginalSourceNull && !isSourceEqual) {
                 reloadSource();

@@ -47,6 +47,7 @@ class VideoEventEmitter {
     private static final String EVENT_PLAYBACK_RATE_CHANGE = "onPlaybackRateChange";
 
     private static final String EVENT_ON_VOLUME_FADE_COMPLETE = "onVolumeFadeComplete";
+    private static final String EVENT_SAVE = "onVideoSave";
 
     static final String[] Events = {
             EVENT_LOAD_START,
@@ -69,6 +70,7 @@ class VideoEventEmitter {
             EVENT_AUDIO_FOCUS_CHANGE,
             EVENT_PLAYBACK_RATE_CHANGE,
             EVENT_ON_VOLUME_FADE_COMPLETE,
+            EVENT_SAVE,
     };
 
     @Retention(RetentionPolicy.SOURCE)
@@ -93,6 +95,7 @@ class VideoEventEmitter {
             EVENT_AUDIO_FOCUS_CHANGE,
             EVENT_PLAYBACK_RATE_CHANGE,
             EVENT_ON_VOLUME_FADE_COMPLETE,
+            EVENT_SAVE,
     })
     @interface VideoEvents {
     }
@@ -227,6 +230,12 @@ class VideoEventEmitter {
         WritableMap map = Arguments.createMap();
         map.putDouble(EVENT_PROP_PLAYBACK_RATE, (double)rate);
         receiveEvent(EVENT_PLAYBACK_RATE_CHANGE, map);
+    }
+
+    void fileSaved(String relativePath) {
+        WritableMap map = Arguments.createMap();
+        map.putString("relativePath", relativePath);
+        receiveEvent(EVENT_SAVE, map);
     }
 
     void volumefaded(int requestId) {

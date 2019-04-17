@@ -13,6 +13,7 @@ import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
 import com.google.android.exoplayer2.upstream.DefaultDataSourceFactory;
 import com.google.android.exoplayer2.upstream.HttpDataSource;
 import com.google.android.exoplayer2.util.Util;
+import com.google.android.exoplayer2.upstream.cache.*;
 
 import okhttp3.Cookie;
 import okhttp3.JavaNetCookieJar;
@@ -52,9 +53,13 @@ public class DataSourceUtil {
     }
 
 
-    public static DataSource.Factory getDefaultDataSourceFactory(ReactContext context, DefaultBandwidthMeter bandwidthMeter, Map<String, String> requestHeaders) {
+    public static DataSource.Factory getDefaultDataSourceFactory(ReactContext context, DefaultBandwidthMeter bandwidthMeter, Map<String, String> requestHeaders, SimpleCache cache) {
         if (defaultDataSourceFactory == null || (requestHeaders != null && !requestHeaders.isEmpty())) {
-            defaultDataSourceFactory = buildDataSourceFactory(context, bandwidthMeter, requestHeaders);
+            if(cache != null) {
+                defaultDataSourceFactory = buildCacheDataSourceFactory(context, bandwidthMeter, requestHeaders, cache);
+            } else {
+                defaultDataSourceFactory = buildDataSourceFactory(context, bandwidthMeter, requestHeaders);
+            }
         }
         return defaultDataSourceFactory;
     }
@@ -70,6 +75,10 @@ public class DataSourceUtil {
     private static DataSource.Factory buildDataSourceFactory(ReactContext context, DefaultBandwidthMeter bandwidthMeter, Map<String, String> requestHeaders) {
         return new DefaultDataSourceFactory(context, bandwidthMeter,
                 buildHttpDataSourceFactory(context, bandwidthMeter, requestHeaders));
+    }
+
+    private static DataSource.Factory buildCacheDataSourceFactory(ReactContext context, DefaultBandwidthMeter bandwidthMeter, Map<String, String> requestHeaders, Cache cache) {
+        return new CacheDataSourceFactory(cache, buildHttpDataSourceFactory(context, bandwidthMeter, requestHeaders));
     }
 
     private static HttpDataSource.Factory buildHttpDataSourceFactory(ReactContext context, DefaultBandwidthMeter bandwidthMeter, Map<String, String> requestHeaders) {
