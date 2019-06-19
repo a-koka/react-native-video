@@ -67,18 +67,6 @@ public class ReactExoplayerViewManager extends ViewGroupManager<ReactExoplayerVi
     private static final String PROP_CONTROLS = "controls";
 
     public static final int COMMAND_FADE_VOLUME = 1;
-
-    private VideoEventEmitter eventEmitter;
-
-    public static final int COMMAND_FADE_VOLUME = 1;
-    public static final int COMMAND_SAVE = 2;
-
-    private VideoEventEmitter eventEmitter;
-    private ThemedReactContext trContext;
-    private SimpleCache simpleCache;
-    private Uri srcUri;
-
-    public static final int COMMAND_FADE_VOLUME = 1;
     public static final int COMMAND_SAVE = 2;
 
     private VideoEventEmitter eventEmitter;
